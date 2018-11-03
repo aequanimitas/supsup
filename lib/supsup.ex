@@ -18,7 +18,7 @@ defmodule SupSup do
     Process.flag(:trap_exit, true)
 
     child_spec_list
-    |> start_child()
+    #|> start_child()
     |> loop() 
   end
 
@@ -32,13 +32,17 @@ defmodule SupSup do
   Assumes that the child process is started using spawn_link/3 so
   that it gets linked with the supervising process
   """
-  def start_child([]), do: []
-  def start_child([{m, f, a} | child_spec_list]) do
+  #def start_child([]), do: []
+  def start_child({m, f, a} = _mfa) do
     try do
-      {:ok, pid} = apply(m, f, a)
-      [{pid, {m, f, a}} | start_child(child_spec_list)]
-    rescue
-      UndefinedFunctionError -> start_child(child_spec_list)
+      apply(m, f, a)
+    catch
+      kind, reason ->
+        {:error, __STACKTRACE__}
+    else 
+      {:ok, pid} ->
+        #[{pid, {m, f, a}} | start_child(child_spec_list)]
+        {:ok, pid}
     end
   end
 
@@ -67,7 +71,6 @@ defmodule SupSup do
         loop(child_list)
       {:EXIT, pid, _reason} ->
         new_child_list = restart_child(pid, child_list)
-
         new_child_list |> loop()
 
       {:stop, from} ->
@@ -82,29 +85,5 @@ defmodule SupSup do
   ## API
   def count_children(pid) do
     call(pid, :count_children)
-  end
-
-  defmodule Add do
-    def start(num_add) do
-      pid = spawn_link(__MODULE__, :loop, [num_add])
-      pid |> Process.register(__MODULE__)
-      {:ok, pid}
-    end
-
-    def call(pid, number) do
-      send(pid, {:request, self(), number})
-      receive do
-        {:reply, reply} -> reply
-      end
-    end
-
-    def reply(from, reply), do: send(from, {:reply, reply})
-    def loop(num_add) do
-      receive do
-        {:request, from, message} ->
-          reply(from, message + num_add)
-          loop(num_add)
-      end
-    end
   end
 end
